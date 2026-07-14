@@ -1,0 +1,47 @@
+.PHONY: up down build install update migrate seed clear-cache optimize rebuild-assets logs shell shell-mysql restart ps
+
+up:
+	docker compose up -d
+
+down:
+	docker compose down
+
+build:
+	docker compose build
+
+# Force-run the installer even if backend/storage/installed already exists.
+install:
+	docker compose run --rm installer /var/www/scripts/install.sh
+
+update:
+	docker compose exec app /var/www/scripts/update.sh
+
+migrate:
+	docker compose exec app /var/www/scripts/migrate.sh
+
+seed:
+	docker compose exec app /var/www/scripts/seed.sh
+
+clear-cache:
+	docker compose exec app /var/www/scripts/clear-cache.sh
+
+optimize:
+	docker compose exec app /var/www/scripts/optimize.sh
+
+rebuild-assets:
+	./scripts/rebuild-assets.sh
+
+logs:
+	docker compose logs -f
+
+restart:
+	docker compose restart
+
+ps:
+	docker compose ps
+
+shell:
+	docker compose exec app sh
+
+shell-mysql:
+	docker compose exec mysql mysql -u$${DB_USERNAME:-bagisto} -p$${DB_PASSWORD:-bagisto_dev_secret} $${DB_DATABASE:-bagisto}

@@ -1,0 +1,167 @@
+x-app-build: &app-build
+  build:
+    context: .
+    dockerfile: docker/php/Dockerfile
+    target: dev
+    args:
+      UID: ${UID:-1000}
+      GID: ${GID:-1000}
+
+x-app-volumes: &app-volumes
+  volumes:
+    - ./backend:/var/www/html
+    - ./scripts:/var/www/scripts
+
+x-app-env: &app-env
+  env_file:
+    - ./backend/.env
+
+services:
+  mysql:
+    image: mysql:8.0
+    container_name: bagisto-mysql
+    restart: unless-stopped
+    environment:
+      MYSQL_DATABASE: ${DB_DATABASE:-bagisto}
+      MYSQL_USER: ${DB_USERNAME:-bagisto}
+      MYSQL_PASSWORD: ${DB_PASSWORD:-bagisto_dev_secret}
+      MYSQL_ROOT_PASSWORD: ${DB_ROOT_PASSWORD:-bagisto_root_dev_secret}
+    volumes:
+      - mysql_data:/var/lib/mysql
+    ports:
+      - "${MYSQL_PORT:-3307}:3306"
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h 127.0.0.1 -uroot -p$$MYSQL_ROOT_PASSWORD --silent"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+    networks: [bagisto]
+
+  redis:
+    image: redis:7-alpine
+    container_name: bagisto-redis
+    restart: unless-stopped
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - redis_data:/data
+    ports:
+      - "${REDIS_PORT:-6380}:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    networks: [bagisto]
+
+  elasticsearch:
+    image: docker.elastic.co/elasticsearch/elasticsearch:8.15.0
+    container_name: bagisto-elasticsearch
+    restart: unless-stopped
+    environment:
+      discovery.type: single-node
+      xpack.security.enabled: "false"
+      ES_JAVA_OPTS: "-Xms512m -Xmx512m"
+    volumes:
+      - es_data:/usr/share/elasticsearch/data
+    ports:
+      - "${ELASTICSEARCH_PORT:-9200}:9200"
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://127.0.0.1:9200/_cluster/health || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 20
+      start_period: 30s
+    networks: [bagisto]
+
+  mailhog:
+    image: mailhog/mailhog:v1.0.1
+    container_name: bagisto-mailhog
+    restart: unless-stopped
+    ports:
+      - "${MAILHOG_WEB_PORT:-8025}:8025"
+      - "${MAILHOG_SMTP_PORT:-1025}:1025"
+    networks: [bagisto]
+
+  # One-shot: installs Bagisto on first boot, then exits. Re-running
+  # `docker compose up -d` is a no-op once backend/storage/installed exists.
+  installer:
+    <<: [*app-build, *app-volumes, *app-env]
+    container_name: bagisto-installer
+    command: ["/var/www/scripts/install.sh"]
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    restart: "no"
+    networks: [bagisto]
+
+  app:
+    <<: [*app-build, *app-volumes, *app-env]
+    container_name: bagisto-app
+    depends_on:
+      installer:
+        condition: service_completed_successfully
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "nc -z 127.0.0.1 9000"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+    restart: unless-stopped
+    networks: [bagisto]
+
+  queue:
+    <<: [*app-build, *app-volumes, *app-env]
+    container_name: bagisto-queue
+    command: ["supervisord", "-n", "-c", "/etc/supervisor/supervisord.queue.conf"]
+    environment:
+      QUEUE_WORKERS: ${QUEUE_WORKERS:-2}
+    depends_on:
+      installer:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+    networks: [bagisto]
+
+  scheduler:
+    <<: [*app-build, *app-volumes, *app-env]
+    container_name: bagisto-scheduler
+    command: ["supervisord", "-n", "-c", "/etc/supervisor/supervisord.scheduler.conf"]
+    depends_on:
+      installer:
+        condition: service_completed_successfully
+      mysql:
+        condition: service_healthy
+    restart: unless-stopped
+    networks: [bagisto]
+
+  nginx:
+    build:
+      context: .
+      dockerfile: docker/nginx/Dockerfile
+    container_name: bagisto-nginx
+    volumes:
+      - ./backend:/var/www/html:ro
+    ports:
+      - "${NGINX_HTTP_PORT:-8080}:80"
+    depends_on:
+      app:
+        condition: service_healthy
+    restart: unless-stopped
+    networks: [bagisto]
+
+volumes:
+  mysql_data:
+  redis_data:
+  es_data:
+
+networks:
+  bagisto:
+    driver: bridge
