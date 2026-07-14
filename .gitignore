@@ -1,0 +1,12 @@
+# Docker-compose-level secrets (DB passwords, etc.) — see .env.example.
+.env
+
+# Claude Code / editor / OS metadata — not project source.
+.claude/
+.vscode/
+.idea/
+.DS_Store
+
+# Bagisto Visual's own runtime storage (editor drafts, published template
+# versions) — generated per-installation, not source.
+backend/storage/bagisto-visual/
