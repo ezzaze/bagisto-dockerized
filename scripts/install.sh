@@ -19,7 +19,11 @@ echo "[install] MySQL is reachable."
 
 INSTALL_FLAGS="--no-interaction"
 if [ "${BAGISTO_DEMO_SAMPLES:-false}" = "true" ]; then
-    INSTALL_FLAGS="$INSTALL_FLAGS --demo-samples"
+    if [ "${APP_ENV:-local}" = "production" ]; then
+        echo "[install] APP_ENV=production — ignoring BAGISTO_DEMO_SAMPLES=true. Demo/sample catalog data is never seeded in production, regardless of that flag."
+    else
+        INSTALL_FLAGS="$INSTALL_FLAGS --demo-samples"
+    fi
 fi
 
 echo "[install] Running php artisan bagisto:install ${INSTALL_FLAGS}..."

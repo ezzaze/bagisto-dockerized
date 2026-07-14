@@ -63,7 +63,12 @@ Default admin credentials (unattended install): `admin@example.com` /
 | http://localhost:9200 | Elasticsearch |
 
 Set `BAGISTO_DEMO_SAMPLES=true` in `backend/.env` before the first boot to
-seed sample catalog data along with the install.
+seed sample catalog data along with the install. This only adds fake demo
+products — `bagisto:install` always seeds the data every install genuinely
+needs (locales, currencies, the default channel, the admin user, tax/customer
+groups), with or without this flag. `scripts/install.sh` also refuses to seed
+demo products at all when `APP_ENV=production`, regardless of this flag, as a
+safety net.
 
 ## Development workflow
 
@@ -119,3 +124,15 @@ See `docker/php/Dockerfile`'s `prod` build target (immutable image, `composer
 install --no-dev`, OPcache with `validate_timestamps=0`) — a
 `docker-compose.prod.yml` overlay and full deployment notes land alongside
 the production-hardening phase of this project.
+
+In `backend/.env` for a production install, set at minimum:
+
+- `APP_ENV=production`, `APP_DEBUG=false`
+- `BAGISTO_DEMO_SAMPLES=false` (or leave it unset) — no demo/sample products.
+  `scripts/install.sh` also blocks this flag outright whenever
+  `APP_ENV=production`, so a stray `true` left over from a dev `.env` can't
+  seed fake products into production.
+- Real, rotated secrets for `APP_KEY`, `DB_PASSWORD`, `DB_ROOT_PASSWORD`
+  (root `.env`), and the default admin password (changed via the Admin panel
+  right after the first install — the unattended installer always creates
+  `admin@example.com` / `admin123`).

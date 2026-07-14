@@ -18,6 +18,8 @@
         "ext-pdo_mysql": "*",
         "ext-tokenizer": "*",
         "astrotomic/laravel-translatable": "^11.16",
+        "bagistoplus/visual": "2.0.0-alpha.24",
+        "bagistoplus/visual-debut": "2.0.0-alpha.10",
         "barryvdh/laravel-dompdf": "^2.0.0|^3.0",
         "diglactic/laravel-breadcrumbs": "^10.0",
         "elasticsearch/elasticsearch": "^8.10",
