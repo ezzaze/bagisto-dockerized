@@ -10,9 +10,12 @@
 #     so there is NO ./backend bind mount and NO composer step at runtime.
 #     This is why the dev "vendor does not exist and could not be created"
 #     failure cannot happen here.
-#   * Code is read from the image; only storage/ and public/ are shared via
-#     named volumes so uploads, caches, the storage symlink, and static assets
-#     survive restarts and are visible to nginx.
+#   * The only host file the containers read is backend/.env (mounted rw so the
+#     first-boot installer can write APP_KEY / DB details into it). Everything
+#     else — code, vendor — comes from the image. Secrets stay out of the image.
+#   * storage/, public/, and bootstrap/cache are shared via named volumes so
+#     uploads, the storage symlink, static assets, and the optimize cache pass
+#     are visible to every container (and to nginx) and survive restarts.
 #   * MySQL/Redis/Elasticsearch are not published to the host.
 #
 # Before first boot, in backend/.env set: APP_ENV=production, APP_DEBUG=false,
@@ -32,6 +35,20 @@ x-prod-env: &prod-env
     # Enforced regardless of a stale backend/.env — install.sh refuses to seed
     # demo/sample products when APP_ENV=production.
     APP_ENV: production
+
+# Web/FPM containers: serve static assets + read/write the storage symlink and
+# the shared config cache; the installer writes APP_KEY into the mounted .env.
+x-app-web-volumes: &app-web-volumes
+  - app_storage:/var/www/html/storage
+  - app_public:/var/www/html/public
+  - app_bootstrap_cache:/var/www/html/bootstrap/cache
+  - ./backend/.env:/var/www/html/.env
+
+# Worker containers (queue/scheduler): no public/ needed.
+x-app-worker-volumes: &app-worker-volumes
+  - app_storage:/var/www/html/storage
+  - app_bootstrap_cache:/var/www/html/bootstrap/cache
+  - ./backend/.env:/var/www/html/.env
 
 services:
   mysql:
@@ -85,8 +102,8 @@ services:
       start_period: 30s
     networks: [bagisto]
 
-  # One-shot per deploy: installs on first boot (migrations + seed of core
-  # data only), then links storage and bakes production caches on every run.
+  # One-shot per deploy: installs on first boot (migrations + core-data seed),
+  # then links storage and bakes production caches on every run.
   installer:
     <<: [*prod-build, *prod-env]
     container_name: bagisto-prod-installer
@@ -94,9 +111,7 @@ services:
       - sh
       - -c
       - /var/www/scripts/install.sh && php artisan storage:link --force && /var/www/scripts/optimize.sh
-    volumes:
-      - app_storage:/var/www/html/storage
-      - app_public:/var/www/html/public
+    volumes: *app-web-volumes
     depends_on:
       mysql:
         condition: service_healthy
@@ -108,9 +123,7 @@ services:
   app:
     <<: [*prod-build, *prod-env]
     container_name: bagisto-prod-app
-    volumes:
-      - app_storage:/var/www/html/storage
-      - app_public:/var/www/html/public
+    volumes: *app-web-volumes
     depends_on:
       installer:
         condition: service_completed_successfully
@@ -134,8 +147,7 @@ services:
     environment:
       APP_ENV: production
       QUEUE_WORKERS: ${QUEUE_WORKERS:-2}
-    volumes:
-      - app_storage:/var/www/html/storage
+    volumes: *app-worker-volumes
     depends_on:
       installer:
         condition: service_completed_successfully
@@ -148,8 +160,7 @@ services:
     <<: [*prod-build, *prod-env]
     container_name: bagisto-prod-scheduler
     command: ["supervisord", "-n", "-c", "/etc/supervisor/supervisord.scheduler.conf"]
-    volumes:
-      - app_storage:/var/www/html/storage
+    volumes: *app-worker-volumes
     depends_on:
       installer:
         condition: service_completed_successfully
@@ -182,6 +193,7 @@ volumes:
   es_data:
   app_storage:
   app_public:
+  app_bootstrap_cache:
 
 networks:
   bagisto:

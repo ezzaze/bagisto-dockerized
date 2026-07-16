@@ -4,6 +4,10 @@ backend/storage/logs/*
 backend/storage/framework/cache/*
 backend/storage/framework/sessions/*
 backend/storage/framework/views/*
+# Runtime install marker — must NOT be baked into images, or install.sh will
+# skip migrations/seed on a fresh prod database (it is written per-environment
+# after a successful install).
+backend/storage/installed
 backend/.env
 backend/.env.example
 backend/public/storage

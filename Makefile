@@ -1,8 +1,13 @@
 .PHONY: up down build install update migrate seed clear-cache optimize rebuild-assets logs shell shell-mysql restart ps \
 	prod-build prod-up prod-down prod-install prod-logs prod-ps
 
-# Production compose file (self-contained; see docker-compose.prod.yml header).
-PROD := docker compose -f docker-compose.prod.yml
+# Production compose (self-contained; see docker-compose.prod.yml header).
+# A dedicated project name (-p) is REQUIRED: it isolates prod images,
+# containers, volumes, and networks from the dev stack. Without it, prod and
+# dev share the "bagisto" project and clobber each other's images (dev bakes no
+# code, so prod would silently reuse the empty dev image). -p overrides the
+# COMPOSE_PROJECT_NAME set in the root .env.
+PROD := docker compose -p bagisto-prod -f docker-compose.prod.yml
 
 up:
 	docker compose up -d
