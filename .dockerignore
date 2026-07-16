@@ -11,7 +11,11 @@ backend/storage/installed
 backend/.env
 backend/.env.example
 backend/public/storage
-backend/public/themes/**/build
+# NOTE: compiled theme assets (public/themes/**/build) are intentionally NOT
+# ignored — the prod image bakes them so bagisto_asset()/Vite can resolve the
+# manifest. Without them every page calling bagisto_asset() aborts 404
+# (Webkul\Theme\Theme::url). Run `make rebuild-assets` before building the
+# prod image so these dirs are current.
 frontend/node_modules
 frontend/.next
 **/.git
