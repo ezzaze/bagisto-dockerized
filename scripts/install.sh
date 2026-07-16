@@ -14,9 +14,12 @@ fi
 # The dev image intentionally ships no vendor/ (see docker/php/Dockerfile) and
 # relies on the bind-mounted host code. On a fresh clone that directory is
 # empty, so bootstrap Composer deps before artisan needs the autoloader.
+# www-data's HOME (/var/www) is root-owned, so point Composer at a writable
+# home/cache to avoid "cannot create cache directory" noise and failures.
 if [ ! -f vendor/autoload.php ]; then
     echo "[install] vendor/autoload.php missing — running composer install..."
-    composer install --no-interaction --prefer-dist
+    COMPOSER_HOME="${COMPOSER_HOME:-/tmp/composer}" \
+        composer install --no-interaction --prefer-dist
 fi
 
 echo "[install] Waiting for MySQL at ${DB_HOST:-mysql}:${DB_PORT:-3306}..."
