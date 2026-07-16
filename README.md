@@ -120,10 +120,30 @@ call `docker compose exec app /var/www/scripts/<name>.sh` directly.
 
 ## Production deployment
 
-See `docker/php/Dockerfile`'s `prod` build target (immutable image, `composer
-install --no-dev`, OPcache with `validate_timestamps=0`) — a
-`docker-compose.prod.yml` overlay and full deployment notes land alongside
-the production-hardening phase of this project.
+Production runs from `docker-compose.prod.yml` (self-contained — use it on its
+own, **not** layered on the dev `docker-compose.yml`). It builds the
+`docker/php/Dockerfile` `prod` target: an immutable image with application
+code **and** `vendor/` baked in (`composer install --no-dev`, OPcache with
+`validate_timestamps=0`). There is no `./backend` bind mount, so the dev-only
+"vendor does not exist and could not be created" failure cannot occur — the
+autoloader is already in the image.
+
+```bash
+make prod-build     # docker compose -f docker-compose.prod.yml build
+make prod-up        # start the prod stack (installer runs migrations,
+                    #   storage:link, and the optimize cache pass)
+make prod-logs
+make prod-down
+```
+
+`storage/` and `public/` are shared to nginx via named volumes so uploads, the
+`public/storage` symlink, and static assets persist and are served correctly.
+
+> **Front-end assets:** `.dockerignore` excludes `backend/public/themes/**/build`,
+> so compiled storefront/theme assets are **not** baked into the image. Build
+> them (`make rebuild-assets`) and ship them into the `app_public` volume before
+> the storefront will render styled. This is the remaining production-hardening
+> item.
 
 In `backend/.env` for a production install, set at minimum:
 
